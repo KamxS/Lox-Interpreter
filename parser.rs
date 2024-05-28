@@ -28,10 +28,24 @@ impl Parser {
     }
 
     pub fn expression(&mut self) -> Expr{
-        self.primary()
+        self.unary()
     }
 
-    // primary → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
+    //  ( "!" | "-" ) unary  | primary
+    fn unary(&mut self) -> Expr {
+        let token = self.peek();
+        if let Some(token) = self.peek() {
+            if matches!((*token).token_type, TokenType::Bang | TokenType::Minus) {
+                self.advance();
+                return Expr::Unary(token.clone(), Box::new(self.primary()));
+            }else {
+                panic!("TODO, unary");
+            }
+        }else {
+            self.primary()
+        }
+    }
+
     fn primary(&mut self) -> Expr {
         if let Some(token) = self.advance() {
             if matches!((*token).token_type, TokenType::Number(_) | TokenType::String(_) | TokenType::True | TokenType::False | TokenType::Nil) {
