@@ -33,41 +33,48 @@ impl Parser {
 
     //  ( "!" | "-" ) unary  | primary
     fn unary(&mut self) -> Expr {
-        let token = self.peek();
-        if let Some(token) = self.peek() {
-            if matches!((*token).token_type, TokenType::Bang | TokenType::Minus) {
-                self.advance();
-                return Expr::Unary(token.clone(), Box::new(self.primary()));
-            }else {
-                panic!("TODO, unary");
-            }
-        }else {
-            self.primary()
+        if self.check_next(&[TokenType::Bang, TokenType::Minus]) {
+            let token = self.advance().unwrap();
+            return Expr::Unary(token, Box::new(self.primary()));
         }
+        self.primary()
     }
 
     fn primary(&mut self) -> Expr {
         if let Some(token) = self.advance() {
-            if matches!((*token).token_type, TokenType::Number(_) | TokenType::String(_) | TokenType::True | TokenType::False | TokenType::Nil) {
+            if matches!(token.token_type, TokenType::Number(_) | TokenType::String(_) | TokenType::True | TokenType::False | TokenType::Nil) {
                 return Expr::Literal(token.clone());
-            }else if matches!((*token).token_type, TokenType::LeftParen) {
+            }else if matches!(token.token_type, TokenType::LeftParen) {
                 let expr = self.expression();
                 let r_paren= self.advance().expect("Expect ')' after expression.");
-                assert!(matches!((*r_paren).token_type,TokenType::RightParen));
+                assert!(matches!(r_paren.token_type,TokenType::RightParen));
                 return Expr::Grouping(Box::new(expr));
             }else {
-                panic!("TODO: Invalid literal")
+                panic!("TODO: Invalid literal: {:?}", token.token_type)
             }
         }else {
             panic!("TODO: No token left");
         }
     }
 
-    fn advance(&mut self) -> Option<&Token>{
+    fn advance(&mut self) -> Option<Token>{
         self.current+=1;
-        self.tokens.get(self.current-1)
+        if self.current-1<self.tokens.len() {
+            return Some(self.tokens[self.current-1].clone());
+        }
+        None
     }
     fn peek(&self) -> Option<&Token>{
         self.tokens.get(self.current)
+    }
+    fn check_next(&self, tokens: &[TokenType]) -> bool {
+        if let Some(t) = self.tokens.get(self.current) {
+            for token in tokens {
+                if t.token_type == *token {
+                    return true;
+                }
+            }
+        }
+        false
     }
 }
