@@ -1,4 +1,4 @@
-use crate::error::{error, report};
+use crate::error::{error, report, lexer_error};
 use core::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -21,10 +21,10 @@ pub enum TokenType {
 #[derive(Debug, Clone)]
 pub struct Token {
     pub token_type:TokenType,
-    pub line:u32
+    pub line:u16
 }
 impl Token {
-    pub fn new(token_type: TokenType, line: u32) -> Self {
+    pub fn new(token_type: TokenType, line: u16) -> Self {
         Self { token_type, line}
     }
 }
@@ -39,7 +39,7 @@ pub struct Lexer {
     tokens: Vec<Token>,
     start: usize,
     current: usize,
-    line: u32
+    line: u16
 }
 impl Lexer {
     pub fn new(input: &String) -> Self {
@@ -98,7 +98,7 @@ impl Lexer {
                         }
                     }
                     if self.peek() == None {
-                        error(self.line, "Unterminated string");
+                        lexer_error(self.line, "Unterminated string");
                     }
                     let substr = String::from(&self.input[self.start..self.current-1]);
                     self.tokens.push(Token::new(TokenType::String(substr), self.line));
@@ -120,7 +120,7 @@ impl Lexer {
                         }
                         match self.input[self.start-1..self.current].parse::<f32>() {
                             Ok(v) => self.tokens.push(Token::new(TokenType::Number(v), self.line)),
-                            _ => error(self.line, "Invalid Number")
+                            _ => lexer_error(self.line, "Invalid Number")
                         }
                     }else if l.is_alphanumeric() {
                         while let Some(n) = self.peek() {
@@ -130,15 +130,31 @@ impl Lexer {
                             self.advance();
                         }
                         match &self.input[self.start-1..self.current] {
+                            "and" => self.tokens.push(Token::new(TokenType::And,self.line)),
+                            "class" => self.tokens.push(Token::new(TokenType::Class,self.line)),
+                            "else" => self.tokens.push(Token::new(TokenType::Else,self.line)),
+                            "fun" => self.tokens.push(Token::new(TokenType::Fun,self.line)),
+                            "for" => self.tokens.push(Token::new(TokenType::For,self.line)),
+                            "if" => self.tokens.push(Token::new(TokenType::If,self.line)),
+                            "or" => self.tokens.push(Token::new(TokenType::Or,self.line)),
+                            "print" => self.tokens.push(Token::new(TokenType::Print,self.line)),
+                            "return" => self.tokens.push(Token::new(TokenType::Return,self.line)),
+                            "super" => self.tokens.push(Token::new(TokenType::Super,self.line)),
+                            "this" => self.tokens.push(Token::new(TokenType::This,self.line)),
+                            "while" => self.tokens.push(Token::new(TokenType::While,self.line)),
                             "var" => self.tokens.push(Token::new(TokenType::Var,self.line)),
+                            "true" => self.tokens.push(Token::new(TokenType::True,self.line)),
+                            "false" => self.tokens.push(Token::new(TokenType::False,self.line)),
+                            "null" => self.tokens.push(Token::new(TokenType::Nil,self.line)),
                             v => self.tokens.push(Token::new(TokenType::Identifier(String::from(v)), self.line))
                         }
                     }else {
-                        error(self.line, "Unexpected character")
+                        lexer_error(self.line, "Unexpected character");
                     }
                 }
             }
         }
+        self.tokens.push(Token::new(TokenType::Eof, self.line));
     }
     fn advance(&mut self) -> Option<char>{
         self.current+=1;

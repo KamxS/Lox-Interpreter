@@ -1,17 +1,19 @@
-use core::fmt;
 use std::{fs};
 
-pub mod lexer;
 pub mod error;
+pub mod lexer;
 pub mod parser;
-use lexer::{Lexer,Token, TokenType};
+pub mod interpreter;
+use lexer::{Lexer};
 use parser::{Parser};
+use interpreter::{Interpreter};
 
 fn run(src: &String) {
     let mut lex = Lexer::new(src);
     lex.scan();
     let mut parser = Parser::new(lex.get_tokens());
-    println!("{}",parser.expression());
+    let interpreter = Interpreter{};
+    interpreter.interpret(&parser.parse());
 }
 
 fn main() {

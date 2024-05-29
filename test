@@ -1,1 +1,2 @@
--(12)
+print "Fav Number: " + (19+ 25 * 4 / 2);
+print true;
