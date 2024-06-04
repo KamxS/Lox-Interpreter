@@ -18,6 +18,11 @@ pub enum TokenType {
     Print, Return, Super, This, True, Var, While,
     Eof
 }
+impl fmt::Display for TokenType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 #[derive(Debug, Clone)]
 pub struct Token {
     pub token_type:TokenType,
@@ -26,11 +31,6 @@ pub struct Token {
 impl Token {
     pub fn new(token_type: TokenType, line: u16) -> Self {
         Self { token_type, line}
-    }
-}
-impl fmt::Display for Token {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "[line {}]{:?}", self.line, self.token_type)
     }
 }
 

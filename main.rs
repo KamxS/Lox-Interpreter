@@ -12,7 +12,7 @@ fn run(src: &String) {
     let mut lex = Lexer::new(src);
     lex.scan();
     let mut parser = Parser::new(lex.get_tokens());
-    let interpreter = Interpreter{};
+    let mut interpreter = Interpreter::new();
     interpreter.interpret(&parser.parse());
 }
 

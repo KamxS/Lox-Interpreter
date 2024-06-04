@@ -1,5 +1,5 @@
 use core::{fmt, panic};
-use crate::{error::error, lexer::{Token, TokenType}};
+use crate::{lexer::{Token, TokenType}};
 
 pub enum Expr {
     Literal(Token), 
@@ -40,8 +40,12 @@ impl ParserError {
     }
 }
 impl fmt::Display for ParserError {
-    fn fmt(&self, _f: &mut fmt::Formatter) -> fmt::Result {
-        error(&self.token, self.message);
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.token.token_type == TokenType::Eof {
+            write!(f,"[line {}] Error at the end: {}", self.token.line, self.message)?
+        } else {
+            write!(f,"[line {}] Error at '{}': {}", self.token.line, self.token.token_type, self.message)?
+        }
         Ok(())
     }
 }
@@ -194,7 +198,7 @@ impl Parser {
             }else if matches!(token.token_type, TokenType::Identifier(_)) {
                 return Ok(Expr::Variable(token));
             }else {
-                panic!("TODO: Invalid literal: {:?}", token.token_type)
+                return Err(ParserError::new(&token, "Expected expression."));
             }
         }else {
             panic!("TODO: No token left");

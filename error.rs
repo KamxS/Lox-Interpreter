@@ -10,7 +10,7 @@ pub fn error(token: &Token, message: &'static str) {
     if token.token_type == TokenType::Eof {
         report(token.line, " at end", message);
     } else {
-        let str = String::from("at ") + stringify!(token_type);
+        let str = String::from("at ") + token.token_type.to_string().as_str();
         report(token.line, str.as_str(), message);
     }
 }
