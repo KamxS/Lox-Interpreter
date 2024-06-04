@@ -23,11 +23,12 @@ impl fmt::Display for Value {
 }
 
 pub struct Interpreter {
-    vars: HashMap<String, Value>
+    //vars: HashMap<String, Value>
 }
 impl Interpreter {
     pub fn new() -> Self {
-        Self{vars: HashMap::new()}
+        //Self{vars: HashMap::new()}
+        Self{}
     }
     pub fn interpret(&self, statements: &Vec<Stmt>) {
         for stmt in statements.iter() {

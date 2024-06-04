@@ -2,11 +2,11 @@ use std::fmt::Debug;
 
 use crate::lexer::{Token, TokenType};
 
-pub fn lexer_error(line: u16, message: &str) {
+pub fn lexer_error(line: u16, message: &'static str) {
     report(line, "", "Unexpected character");
 }
 
-pub fn error(token: Token, message: &str) {
+pub fn error(token: &Token, message: &'static str) {
     if token.token_type == TokenType::Eof {
         report(token.line, " at end", message);
     } else {
