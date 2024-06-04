@@ -40,7 +40,7 @@ impl ParserError {
     }
 }
 impl fmt::Display for ParserError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, _f: &mut fmt::Formatter) -> fmt::Result {
         error(&self.token, self.message);
         Ok(())
     }
@@ -221,10 +221,13 @@ impl Parser {
     }
 
     fn expect_token(&mut self, typ: TokenType, msg: &'static str) -> Result<(), ParserError> {
-        let token = self.advance().expect(msg);
-        if token.token_type != typ {
-            return Err(ParserError::new(&token, msg));
+        if let Some(t) = self.tokens.get(self.current) {
+            if t.token_type == typ {
+                self.advance();
+                return Ok(());
+            }
+            return Err(ParserError::new(&t, msg));
         }
-        Ok(())
+        panic!("TODO");
     }
 }
