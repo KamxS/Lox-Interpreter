@@ -41,11 +41,11 @@ impl fmt::Display for RuntimeError {
 }
 
 pub struct Interpreter {
-    vars: HashMap<String, Value>
+    vars: Vec<HashMap<String, Value>>
 }
 impl Interpreter {
     pub fn new() -> Self {
-        Self{vars: HashMap::new()}
+        Self{vars: vec!(HashMap::new())}
     }
     pub fn interpret(&mut self, statements: &Vec<Stmt>) {
         for stmt in statements.iter() {
@@ -57,7 +57,18 @@ impl Interpreter {
         match stmt {
             Stmt::Print(_) => self.print_stmt(stmt),
             Stmt::Var(_, _) => self.var_decl_stmt(stmt),
+            Stmt::Block(_) => self.block(stmt),
             _ => self.expr_stmt(stmt)
+        }
+    }
+
+    fn block(&mut self, stmt: &Stmt) {
+        if let Stmt::Block(stmts) = stmt{
+            self.vars.push(HashMap::new());
+            for stmt in stmts.iter() {
+                self.execute(stmt)
+            }
+            self.vars.pop();
         }
     }
 
@@ -90,6 +101,17 @@ impl Interpreter {
             Expr::Unary(_,_) => self.eval_unary(expr),
             Expr::Binary(_,_,_) => self.eval_binary(expr),
             Expr::Variable(_) => self.eval_variable(expr),
+            Expr::Assign(_,_) => self.eval_assignment(expr)
+        }
+    }
+
+    fn eval_assignment(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
+        if let Expr::Assign(name_token, e) = expr {
+            let value = self.eval(e)?; 
+            self.assign(&name_token, value.clone())?;
+            return Ok(value);
+        }else {
+            panic!()
         }
     }
 
@@ -195,8 +217,8 @@ impl Interpreter {
     fn define(&mut self, token: &Token, value: Value) {
         match &token.token_type {
             TokenType::Identifier(name) => {
-                self.vars.insert(name.clone(), value);
-                return;
+                let ind = self.vars.len()-1;
+                self.vars[ind].insert(name.clone(), value);
             }
             _ => panic!("This shouldn't be here (parser error)")
         }
@@ -205,11 +227,28 @@ impl Interpreter {
     fn get(&mut self, token: &Token) -> Result<Value, RuntimeError>{
         match &token.token_type {
             TokenType::Identifier(name) => {
-                if let Some(v) = self.vars.get(name) {
-                    return Ok(v.clone());
-                }else {
-                    return Err(RuntimeError::new(token, "Undefined variable [TODO: add var name]"))
+                for ind in (0..self.vars.len()).rev() {
+                    if let Some(v) = self.vars[ind].get(name) {
+                        return Ok(v.clone());
+                    }
                 }
+                return Err(RuntimeError::new(token, "Undefined variable [TODO: add var name]"))
+            }
+            _ => panic!("This shouldn't be here (parser error)")
+        }
+    }
+
+    fn assign(&mut self, token: &Token, value: Value) -> Result<(), RuntimeError>{
+        match &token.token_type {
+            TokenType::Identifier(name) => {
+                for ind in (0..self.vars.len()).rev() {
+                    if self.vars[ind].contains_key(name) {
+                        let v = self.vars[ind].get_mut(name).unwrap();
+                        *v = value;
+                        return Ok(());
+                    }
+                }
+                return Err(RuntimeError::new(token, "Undefined variable [TODO: add var name]"))
             }
             _ => panic!("This shouldn't be here (parser error)")
         }

@@ -12,8 +12,14 @@ fn run(src: &String) {
     let mut lex = Lexer::new(src);
     lex.scan();
     let mut parser = Parser::new(lex.get_tokens());
+    let stmts = parser.parse();
+    /*
+    for stmt in stmts.iter() {
+        println!("{:?}", stmt);
+    }
+    */
     let mut interpreter = Interpreter::new();
-    interpreter.interpret(&parser.parse());
+    interpreter.interpret(&stmts);
 }
 
 fn main() {

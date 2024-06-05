@@ -1,10 +1,12 @@
 use core::{fmt, panic};
 use crate::{lexer::{Token, TokenType}};
 
+#[derive(Debug)]
 pub enum Expr {
     Literal(Token), 
     Variable(Token),
     Unary(Token, Box<Expr>),
+    Assign(Token, Box<Expr>),
     Binary(Box<Expr>, Token, Box<Expr>),
     Grouping(Box<Expr>)
 }
@@ -15,14 +17,17 @@ impl fmt::Display for Expr {
             Expr::Binary(expr_l, t, expr_r) => write!(f, "({:?}, {}, {})", t.token_type, expr_l, expr_r),
             Expr::Grouping(expr) => write!(f, "(group, {})", expr),
             Expr::Literal(t) => write!(f, "{:?}", t.token_type),
-            Expr::Variable(variable) => write!(f, "{:?}", variable)
+            Expr::Variable(variable) => write!(f, "{:?}", variable),
+            Expr::Assign(var, expr) => write!(f, "{:?}={}", var, expr)
         }
     }
 }
 
+#[derive(Debug)]
 pub enum Stmt {
     Print(Expr),
     Expression(Expr),
+    Block(Vec<Stmt>),
     Var(Token, Option<Expr>)
 }
 
@@ -108,9 +113,23 @@ impl Parser {
         if self.check_next(&[TokenType::Print]) {
             self.advance();
             return self.print_statement();
+        }else if self.check_next(&[TokenType::LeftBrace]) {
+            self.advance();
+            return Ok(Stmt::Block(self.block()?));
         }else {
             return self.expr_statement();
         }
+    }
+
+    fn block(&mut self) -> Result<Vec<Stmt>, ParserError> {
+        let mut stmts: Vec<Stmt> = vec!();
+        while !self.check_next(&[TokenType::RightBrace]) {
+            if let Some(stmt) = self.declaration() {
+                stmts.push(stmt);
+            }
+        }
+        self.expect_token(TokenType::RightBrace, "Expect '}' after block.")?;
+        Ok(stmts)
     }
 
     fn print_statement(&mut self) -> Result<Stmt, ParserError>{
@@ -125,7 +144,20 @@ impl Parser {
     }
 
     fn expression(&mut self) -> Result<Expr, ParserError>{
-        self.equality()
+        self.assignment()
+    }
+
+    fn assignment(&mut self) -> Result<Expr, ParserError> {
+        let expr = self.equality()?;
+        if self.check_next(&[TokenType::Equal]) {
+            let equals = self.advance().unwrap();
+            if let Expr::Variable(token) = expr {
+                return Ok(Expr::Assign(token, Box::new(self.assignment()?)));
+            }else {
+                return Err(ParserError::new(&equals, "Invalid assignment target."));
+            }
+        }
+        Ok(expr)
     }
 
     fn equality(&mut self) -> Result<Expr, ParserError> {
