@@ -8,6 +8,7 @@ pub enum Expr {
     Unary(Token, Box<Expr>),
     Assign(Token, Box<Expr>),
     Binary(Box<Expr>, Token, Box<Expr>),
+    Logical(Box<Expr>, Token, Box<Expr>),
     Grouping(Box<Expr>)
 }
 impl fmt::Display for Expr {
@@ -15,6 +16,7 @@ impl fmt::Display for Expr {
         match self {
             Expr::Unary(t,expr) => write!(f, "({:?}, {})", t.token_type, expr),
             Expr::Binary(expr_l, t, expr_r) => write!(f, "({:?}, {}, {})", t.token_type, expr_l, expr_r),
+            Expr::Logical(expr_l, t, expr_r) => write!(f, "({:?}, {}, {})", t.token_type, expr_l, expr_r),
             Expr::Grouping(expr) => write!(f, "(group, {})", expr),
             Expr::Literal(t) => write!(f, "{:?}", t.token_type),
             Expr::Variable(variable) => write!(f, "{:?}", variable),
@@ -28,7 +30,9 @@ pub enum Stmt {
     Print(Expr),
     Expression(Expr),
     Block(Vec<Stmt>),
-    Var(Token, Option<Expr>)
+    Var(Token, Option<Expr>),
+    If(Expr, Box<Stmt>, Option<Box<Stmt>>),
+    While(Expr, Box<Stmt>),
 }
 
 #[derive(Debug, Clone)]
@@ -116,7 +120,17 @@ impl Parser {
         }else if self.check_next(&[TokenType::LeftBrace]) {
             self.advance();
             return Ok(Stmt::Block(self.block()?));
-        }else {
+        }else if self.check_next(&[TokenType::If]) {
+            self.advance();
+            return self.if_statement();
+        }else if self.check_next(&[TokenType::While]) {
+            self.advance();
+            return self.while_statement();
+        }else if self.check_next(&[TokenType::For]) {
+            self.advance();
+            return self.for_statement();
+        }
+        else {
             return self.expr_statement();
         }
     }
@@ -130,6 +144,63 @@ impl Parser {
         }
         self.expect_token(TokenType::RightBrace, "Expect '}' after block.")?;
         Ok(stmts)
+    }
+
+    fn for_statement(&mut self) -> Result<Stmt, ParserError> {
+        self.expect_token(TokenType::LeftParen, "Expect '(' after 'while'.")?;
+        let initializer_expr;
+        if self.check_next(&[TokenType::Var]) {
+            self.advance();
+            initializer_expr = Some(self.var_declaration()?);
+        }else if self.check_next(&[TokenType::Semicolon]) {
+            initializer_expr = None;
+        } else {
+            initializer_expr = Some(self.expr_statement()?);
+        }
+
+        let condition_expr;
+        if self.check_next(&[TokenType::Semicolon]) {
+            condition_expr = None;
+        }else {
+            condition_expr = Some(self.expression()?);
+        }
+        self.expect_token(TokenType::Semicolon, "Expect ';' after loop condition.")?;
+
+        let mut increment_expr = None;
+        if !self.check_next(&[TokenType::RightParen]) {
+            increment_expr = Some(self.expression()?);
+        }
+        self.expect_token(TokenType::RightParen, "Expect ')' after while condition.")?;
+        
+        let mut stmt = self.statement()?;
+        if let Some(incr) = increment_expr {
+            stmt = Stmt::Block(vec!(stmt, Stmt::Expression(incr)));
+        }
+        stmt = Stmt::While(condition_expr.unwrap_or(Expr::Literal(Token::new(TokenType::True,0))),Box::new(stmt));
+        if let Some(init) = initializer_expr {
+            stmt = Stmt::Block(vec!(init, stmt));
+        }
+        Ok(stmt)
+    }
+
+    fn while_statement(&mut self) -> Result<Stmt, ParserError> {
+        self.expect_token(TokenType::LeftParen, "Expect '(' after 'while'.")?;
+        let condition = self.expression()?;
+        self.expect_token(TokenType::RightParen, "Expect ')' after while condition.")?;
+        Ok(Stmt::While(condition, Box::new(self.statement()?)))
+    }
+
+    fn if_statement(&mut self) -> Result<Stmt, ParserError> {
+        self.expect_token(TokenType::LeftParen, "Expect '(' after 'if'.")?;
+        let condition = self.expression()?;
+        self.expect_token(TokenType::RightParen, "Expect ')' after if condition.")?;
+        let then = self.statement()?;
+        let mut else_stmt = None;
+        if self.check_next(&[TokenType::Else]) {
+            self.advance();
+            else_stmt = Some(Box::new(self.statement()?));
+        }
+        Ok(Stmt::If(condition,Box::new(then),else_stmt))
     }
 
     fn print_statement(&mut self) -> Result<Stmt, ParserError>{
@@ -148,7 +219,7 @@ impl Parser {
     }
 
     fn assignment(&mut self) -> Result<Expr, ParserError> {
-        let expr = self.equality()?;
+        let expr = self.logic_or()?;
         if self.check_next(&[TokenType::Equal]) {
             let equals = self.advance().unwrap();
             if let Expr::Variable(token) = expr {
@@ -158,6 +229,24 @@ impl Parser {
             }
         }
         Ok(expr)
+    }
+
+    fn logic_or(&mut self) -> Result<Expr, ParserError> {
+        let mut expr = self.logic_and()?;
+        if self.check_next(&[TokenType::Or]) {
+            let token = self.advance().unwrap();
+            expr = Expr::Logical(Box::new(expr), token, Box::new(self.logic_and()?));
+        }
+        return Ok(expr);
+    }
+
+    fn logic_and(&mut self) -> Result<Expr, ParserError> {
+        let mut expr = self.equality()?;
+        if self.check_next(&[TokenType::And]) {
+            let token = self.advance().unwrap();
+            expr = Expr::Logical(Box::new(expr), token, Box::new(self.equality()?));
+        }
+        return Ok(expr);
     }
 
     fn equality(&mut self) -> Result<Expr, ParserError> {

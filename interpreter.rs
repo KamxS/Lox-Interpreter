@@ -56,8 +56,10 @@ impl Interpreter {
     fn execute(&mut self, stmt: &Stmt) {
         match stmt {
             Stmt::Print(_) => self.print_stmt(stmt),
-            Stmt::Var(_, _) => self.var_decl_stmt(stmt),
+            Stmt::Var(_, _) => self.var_decl_stmt(stmt).unwrap(),
             Stmt::Block(_) => self.block(stmt),
+            Stmt::If(_,_,_) => self.if_stmt(stmt).unwrap(),
+            Stmt::While(_,_) => self.while_stmt(stmt).unwrap(),
             _ => self.expr_stmt(stmt)
         }
     }
@@ -72,14 +74,44 @@ impl Interpreter {
         }
     }
 
-    fn var_decl_stmt(&mut self, stmt: &Stmt) {
+    fn if_stmt(&mut self, stmt: &Stmt) -> Result<(),RuntimeError> {
+        if let Stmt::If(condition, then, else_stmt) = stmt {
+            let cond = self.eval(condition)?;
+            if self.get_bool(&cond) {
+                self.execute(then);
+                return Ok(());
+            }else {
+                if let Some(s) = else_stmt {
+                    self.execute(s);
+                }
+                return Ok(());
+            }
+        }
+        panic!()
+    }
+
+    fn while_stmt(&mut self, stmt: &Stmt) -> Result<(),RuntimeError> {
+        if let Stmt::While(condition, stmt) = stmt {
+            let mut cond = self.eval(condition)?;
+            while(self.get_bool(&cond)) {
+                self.execute(stmt);
+                cond = self.eval(condition)?;
+            }
+            return Ok(());
+        }
+        panic!()
+    }
+
+    fn var_decl_stmt(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
         if let Stmt::Var(token, expr) = stmt {
             let mut val = Value::Null;
             if let Some(e) = expr {
-                val = self.eval(e).unwrap();
+                val = self.eval(e)?;
             }
             self.define(token, val);
+            return Ok(());
         }
+        panic!()
     }
 
     fn print_stmt(&mut self, stmt: &Stmt) {
@@ -100,8 +132,9 @@ impl Interpreter {
             Expr::Grouping(e) => self.eval(e),
             Expr::Unary(_,_) => self.eval_unary(expr),
             Expr::Binary(_,_,_) => self.eval_binary(expr),
+            Expr::Logical(_, _, _) => self.eval_logical(expr),
             Expr::Variable(_) => self.eval_variable(expr),
-            Expr::Assign(_,_) => self.eval_assignment(expr)
+            Expr::Assign(_,_) => self.eval_assignment(expr),
         }
     }
 
@@ -150,6 +183,24 @@ impl Interpreter {
             }
         }
         Ok(Value::Null)
+    }
+
+    fn eval_logical(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
+        if let Expr::Logical(l_expr, t, r_expr) = expr {
+            let l_value = self.eval(l_expr)?;
+
+            if matches!(t.token_type, TokenType::Or) {
+                if self.get_bool(&l_value) {
+                    return Ok(l_value);
+                }
+            }else {
+                if !self.get_bool(&l_value) {
+                    return Ok(l_value);
+                }
+            }
+            return self.eval(r_expr);
+        }
+        panic!()
     }
 
     fn eval_binary(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
