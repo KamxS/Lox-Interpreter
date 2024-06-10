@@ -135,7 +135,11 @@ impl Interpreter {
             Expr::Logical(_, _, _) => self.eval_logical(expr),
             Expr::Variable(_) => self.eval_variable(expr),
             Expr::Assign(_,_) => self.eval_assignment(expr),
+            Expr::Call(_,_,_) => self.eval_call(expr)
         }
+    }
+
+    fn eval_call(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
     }
 
     fn eval_assignment(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {

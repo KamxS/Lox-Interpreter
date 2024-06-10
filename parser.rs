@@ -8,6 +8,7 @@ pub enum Expr {
     Unary(Token, Box<Expr>),
     Assign(Token, Box<Expr>),
     Binary(Box<Expr>, Token, Box<Expr>),
+    Call(Box<Expr>, Token, Vec<Expr>),
     Logical(Box<Expr>, Token, Box<Expr>),
     Grouping(Box<Expr>)
 }
@@ -20,7 +21,14 @@ impl fmt::Display for Expr {
             Expr::Grouping(expr) => write!(f, "(group, {})", expr),
             Expr::Literal(t) => write!(f, "{:?}", t.token_type),
             Expr::Variable(variable) => write!(f, "{:?}", variable),
-            Expr::Assign(var, expr) => write!(f, "{:?}={}", var, expr)
+            Expr::Assign(var, expr) => write!(f, "{:?}={}", var, expr),
+            Expr::Call(call, _, args) => {
+                write!(f, "{}(", call)?;
+                for arg in args.iter() {
+                    write!(f, "{}, ", arg)?;
+                }
+                write!(f, ")")
+            }
         }
     }
 }
@@ -288,25 +296,43 @@ impl Parser {
     fn unary(&mut self) -> Result<Expr, ParserError> {
         if self.check_next(&[TokenType::Bang, TokenType::Minus]) {
             let token = self.advance().unwrap();
-            return Ok(Expr::Unary(token, Box::new(self.primary()?)));
+            return Ok(Expr::Unary(token, Box::new(self.unary()?)));
         }
-        self.primary()
+        self.call()
     }
 
-    /*
-    fn ternary(&mut self) -> Expr {
-        let mut expr = self.primary();
-        while self.check_next(&[TokenType::QuestionMark]) {
-            let token = self.advance().unwrap();
-            if self.check_next(&[TokenType::cos]) {
-                //expr = Expr::Ternary(Box::new(expr), token, Box::new(self.unary()), token2, Box);
+    // primary ( "(" arguments? ")" )* ;
+    fn call(&mut self) -> Result<Expr, ParserError> {
+        let mut expr = self.primary()?;
+        loop {
+            if self.check_next(&[TokenType::LeftParen]) {
+                self.advance();
+                expr = self.arguments(expr)?
             }else {
-                panic!("TODO: Invalid Ternary operator syntax");
+                break;
             }
         }
-        return expr;
+        Ok(expr)
     }
-    */
+
+    fn arguments(&mut self, calle: Expr) -> Result<Expr, ParserError> {
+        let mut exprs = vec!();
+        if !self.check_next(&[TokenType::RightParen]) {
+            loop {
+                exprs.push(self.expression()?);
+                if !self.check_next(&[TokenType::Comma]) {
+                    break;
+                }
+                self.advance();
+            } 
+        }
+
+        if exprs.len()>=255 {
+            return Err(ParserError::new(&self.advance().unwrap(), "Can't have more than 255 arguments."));
+        }
+
+        Ok(Expr::Call(Box::new(calle), self.advance().unwrap(), exprs))
+    }
 
     fn primary(&mut self) -> Result<Expr,ParserError> {
         if let Some(token) = self.advance() {
