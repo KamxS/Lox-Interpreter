@@ -32,10 +32,16 @@ impl fmt::Display for Value {
 #[derive(Debug, Clone)]
 struct RuntimeError {
     token: Token,
-    message: &'static str
+    message: String
 }
 impl RuntimeError {
     fn new(token: &Token, message: &'static str) -> Self {
+        Self { 
+            token:token.clone(), 
+            message: String::from(message)
+        }
+    }
+    fn new_str(token: &Token, message: String) -> Self {
         Self { 
             token:token.clone(), 
             message
@@ -50,7 +56,7 @@ impl fmt::Display for RuntimeError {
 
 #[derive(PartialEq, Clone)]
 pub struct Callable {
-    arity: u16,
+    arity: usize,
     call_f: fn(Vec<Value>)->Value
 }
 impl Callable {
@@ -71,29 +77,33 @@ impl Interpreter {
     }
     pub fn interpret(&mut self, statements: &Vec<Stmt>) {
         for stmt in statements.iter() {
-            self.execute(stmt);
+            if let Some(err) = self.execute(stmt).err() {
+                eprintln!("{}", err);
+            }
         }
     }
 
-    fn execute(&mut self, stmt: &Stmt) {
+    fn execute(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
         match stmt {
-            Stmt::Print(_) => self.print_stmt(stmt),
-            Stmt::Var(_, _) => self.var_decl_stmt(stmt).unwrap(),
-            Stmt::Block(_) => self.block(stmt),
-            Stmt::If(_,_,_) => self.if_stmt(stmt).unwrap(),
-            Stmt::While(_,_) => self.while_stmt(stmt).unwrap(),
-            _ => self.expr_stmt(stmt)
+            Stmt::Print(_) => self.print_stmt(stmt)?,
+            Stmt::Var(_, _) => self.var_decl_stmt(stmt)?,
+            Stmt::Block(_) => self.block(stmt)?,
+            Stmt::If(_,_,_) => self.if_stmt(stmt)?,
+            Stmt::While(_,_) => self.while_stmt(stmt)?,
+            _ => self.expr_stmt(stmt)?
         }
+        Ok(())
     }
 
-    fn block(&mut self, stmt: &Stmt) {
+    fn block(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
         if let Stmt::Block(stmts) = stmt{
             self.vars.push(HashMap::new());
             for stmt in stmts.iter() {
-                self.execute(stmt)
+                self.execute(stmt)?
             }
             self.vars.pop();
         }
+        Ok(())
     }
 
     fn if_stmt(&mut self, stmt: &Stmt) -> Result<(),RuntimeError> {
@@ -115,7 +125,7 @@ impl Interpreter {
     fn while_stmt(&mut self, stmt: &Stmt) -> Result<(),RuntimeError> {
         if let Stmt::While(condition, stmt) = stmt {
             let mut cond = self.eval(condition)?;
-            while(self.get_bool(&cond)) {
+            while self.get_bool(&cond) {
                 self.execute(stmt);
                 cond = self.eval(condition)?;
             }
@@ -136,16 +146,18 @@ impl Interpreter {
         panic!()
     }
 
-    fn print_stmt(&mut self, stmt: &Stmt) {
+    fn print_stmt(&mut self, stmt: &Stmt) -> Result<(), RuntimeError>{
         if let Stmt::Print(expr)= stmt{
-            println!("{}", self.eval(expr).unwrap());
+            println!("{}", self.eval(expr)?);
         }
+        Ok(())
     }
 
-    fn expr_stmt(&mut self, stmt: &Stmt) {
+    fn expr_stmt(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
         if let Stmt::Expression(expr)= stmt{
-            self.eval(expr);
+            self.eval(expr)?;
         }
+        Ok(())
     }
 
     fn eval(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
@@ -162,16 +174,19 @@ impl Interpreter {
     }
 
     fn eval_call(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
-        if let Expr::Call(calle, _, args) = expr {
+        if let Expr::Call(calle, t, args) = expr {
             let calle_v = self.eval(calle)?;
             if let Value::CallableV(callable) = calle_v {
+                if args.len() != callable.arity{
+                    return Err(RuntimeError::new_str(t, format!("Expected {} arguments but got {}.", callable.arity, args.len())));
+                }
                 let mut args_v = vec!();
                 for arg in args.iter() {
                     args_v.push(self.eval(arg)?);
                 }
                 Ok(callable.call(args_v))
             }else {
-                todo!();
+                Err(RuntimeError::new(t,"Can only call functions and classes."))
             }
         }else {
             panic!()
