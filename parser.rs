@@ -301,7 +301,6 @@ impl Parser {
         self.call()
     }
 
-    // primary ( "(" arguments? ")" )* ;
     fn call(&mut self) -> Result<Expr, ParserError> {
         let mut expr = self.primary()?;
         loop {
@@ -328,7 +327,7 @@ impl Parser {
         }
 
         if exprs.len()>=255 {
-            return Err(ParserError::new(&self.advance().unwrap(), "Can't have more than 255 arguments."));
+            eprintln!("{}", ParserError::new(&self.advance().unwrap(), "Can't have more than 255 arguments."));
         }
 
         Ok(Expr::Call(Box::new(calle), self.advance().unwrap(), exprs))

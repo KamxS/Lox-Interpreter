@@ -1,14 +1,21 @@
 use core::{fmt, panic};
+use std::time::{SystemTime};
 use std::collections::HashMap;
 
 use crate::parser::{Expr, Stmt};
 use crate::lexer::{Token,TokenType};
 
-#[derive(Debug, PartialEq, Clone)]
+
+fn clock(args: Vec<Value>) -> Value {
+    Value::Number(SystemTime::now().elapsed().unwrap().as_secs() as f32)
+}
+
+#[derive(PartialEq, Clone)]
 pub enum Value {
     String(String), 
     Number(f32), 
     Bool(bool),
+    CallableV(Callable),
     Null
 }
 impl fmt::Display for Value {
@@ -17,6 +24,7 @@ impl fmt::Display for Value {
             Value::String(s) => write!(f, "{}", s),
             Value::Number(n) => write!(f, "{}", n),
             Value::Bool(b) => write!(f, "{}", b),
+            Value::CallableV(_) => write!(f, "Function_Call()"),
             Value::Null => write!(f, "Null")
         }
     }
@@ -40,12 +48,26 @@ impl fmt::Display for RuntimeError {
     }
 }
 
+#[derive(PartialEq, Clone)]
+pub struct Callable {
+    arity: u16,
+    call_f: fn(Vec<Value>)->Value
+}
+impl Callable {
+    fn call(&self, args: Vec<Value>) -> Value{
+        (self.call_f)(args)
+    }
+}
+
 pub struct Interpreter {
     vars: Vec<HashMap<String, Value>>
 }
 impl Interpreter {
     pub fn new() -> Self {
-        Self{vars: vec!(HashMap::new())}
+        let clock_f = Value::CallableV(Callable{arity: 0, call_f: clock});
+        let mut globals = HashMap::new();
+        globals.insert(String::from("clock"), clock_f);
+        Self{vars: vec!(globals)}
     }
     pub fn interpret(&mut self, statements: &Vec<Stmt>) {
         for stmt in statements.iter() {
@@ -140,6 +162,20 @@ impl Interpreter {
     }
 
     fn eval_call(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
+        if let Expr::Call(calle, _, args) = expr {
+            let calle_v = self.eval(calle)?;
+            if let Value::CallableV(callable) = calle_v {
+                let mut args_v = vec!();
+                for arg in args.iter() {
+                    args_v.push(self.eval(arg)?);
+                }
+                Ok(callable.call(args_v))
+            }else {
+                todo!();
+            }
+        }else {
+            panic!()
+        }
     }
 
     fn eval_assignment(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
