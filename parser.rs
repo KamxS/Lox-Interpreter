@@ -116,7 +116,6 @@ impl Parser {
     fn fun_stmt(&mut self, kind: &'static str) -> Result<Stmt, ParserError> {
         let fun_name = self.advance().unwrap();
         if matches!(fun_name.token_type, TokenType::Id(_)) {
-            let fun_name = self.advance().unwrap();
             self.expect_token(TokenType::LeftParen,"Expect '('")?;
             let mut parameters = vec!();
             if !self.check_next(&[TokenType::RightParen]) {

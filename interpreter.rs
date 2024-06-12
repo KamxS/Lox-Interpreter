@@ -6,7 +6,7 @@ use crate::parser::{Expr, Stmt};
 use crate::lexer::{Token,TokenType};
 
 
-fn clock(_args: Vec<Value>) -> Value {
+fn clock(_interpreter: &Interpreter, _args: Vec<Value>) -> Value {
     Value::Number(SystemTime::now().elapsed().unwrap().as_secs() as f32)
 }
 
@@ -54,14 +54,19 @@ impl fmt::Display for RuntimeError {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(Clone)]
 pub struct Callable {
     arity: usize,
-    call_f: fn(Vec<Value>)->Value
+    call_f: fn(&Interpreter, Vec<Value>)->Value
 }
 impl Callable {
-    fn call(&self, args: Vec<Value>) -> Value{
-        (self.call_f)(args)
+    fn call(&self, interpreter: &Interpreter, args: Vec<Value>) -> Value{
+        (self.call_f)(interpreter, args)
+    }
+}
+impl PartialEq for Callable {
+    fn eq(&self, other: &Self) -> bool {
+        false
     }
 }
 
@@ -89,6 +94,7 @@ impl Interpreter {
             Stmt::Var(_, _) => self.var_decl_stmt(stmt)?,
             Stmt::Block(_) => self.block(stmt)?,
             Stmt::If(_,_,_) => self.if_stmt(stmt)?,
+            Stmt::Func(_,_,_) => self.func_decl_stmt(stmt)?,
             Stmt::While(_,_) => self.while_stmt(stmt)?,
             _ => self.expr_stmt(stmt)?
         }
@@ -129,6 +135,21 @@ impl Interpreter {
                 self.execute(stmt)?;
                 cond = self.eval(condition)?;
             }
+            return Ok(());
+        }
+        panic!()
+    }
+
+    fn func_decl_stmt(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
+        if let Stmt::Func(name, parameters, body) = stmt{
+            let func = Value::CallableV(
+                Callable{arity: 0, call_f: |interpreter, arg|{
+                    //fn_local.insert(k, v)
+                    //self.vars.push(HashMap::new());
+                    return Value::Null
+                }}
+            );
+            self.define(name, func);
             return Ok(());
         }
         panic!()
@@ -184,7 +205,7 @@ impl Interpreter {
                 for arg in args.iter() {
                     args_v.push(self.eval(arg)?);
                 }
-                Ok(callable.call(args_v))
+                Ok(callable.call(self, args_v))
             }else {
                 Err(RuntimeError::new(t,"Can only call functions and classes."))
             }
