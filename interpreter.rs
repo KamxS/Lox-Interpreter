@@ -6,7 +6,7 @@ use crate::parser::{Expr, Stmt};
 use crate::lexer::{Token,TokenType};
 
 
-fn clock(args: Vec<Value>) -> Value {
+fn clock(_args: Vec<Value>) -> Value {
     Value::Number(SystemTime::now().elapsed().unwrap().as_secs() as f32)
 }
 
@@ -110,11 +110,11 @@ impl Interpreter {
         if let Stmt::If(condition, then, else_stmt) = stmt {
             let cond = self.eval(condition)?;
             if self.get_bool(&cond) {
-                self.execute(then);
+                self.execute(then)?;
                 return Ok(());
             }else {
                 if let Some(s) = else_stmt {
-                    self.execute(s);
+                    self.execute(s)?;
                 }
                 return Ok(());
             }
@@ -126,7 +126,7 @@ impl Interpreter {
         if let Stmt::While(condition, stmt) = stmt {
             let mut cond = self.eval(condition)?;
             while self.get_bool(&cond) {
-                self.execute(stmt);
+                self.execute(stmt)?;
                 cond = self.eval(condition)?;
             }
             return Ok(());
@@ -206,7 +206,7 @@ impl Interpreter {
     fn eval_literal(&self, expr: &Expr) -> Value{
         if let Expr::Literal(l) = expr {
             match &l.token_type {
-                TokenType::String(s) => return Value::String(s.clone()),
+                TokenType::Str(s) => return Value::String(s.clone()),
                 TokenType::Number(n) => return Value::Number(n.clone()),
                 TokenType::False => return Value::Bool(false),
                 TokenType::True => return Value::Bool(true),
@@ -322,7 +322,7 @@ impl Interpreter {
 
     fn define(&mut self, token: &Token, value: Value) {
         match &token.token_type {
-            TokenType::Identifier(name) => {
+            TokenType::Id(name) => {
                 let ind = self.vars.len()-1;
                 self.vars[ind].insert(name.clone(), value);
             }
@@ -332,7 +332,7 @@ impl Interpreter {
 
     fn get(&mut self, token: &Token) -> Result<Value, RuntimeError>{
         match &token.token_type {
-            TokenType::Identifier(name) => {
+            TokenType::Id(name) => {
                 for ind in (0..self.vars.len()).rev() {
                     if let Some(v) = self.vars[ind].get(name) {
                         return Ok(v.clone());
@@ -346,7 +346,7 @@ impl Interpreter {
 
     fn assign(&mut self, token: &Token, value: Value) -> Result<(), RuntimeError>{
         match &token.token_type {
-            TokenType::Identifier(name) => {
+            TokenType::Id(name) => {
                 for ind in (0..self.vars.len()).rev() {
                     if self.vars[ind].contains_key(name) {
                         let v = self.vars[ind].get_mut(name).unwrap();

@@ -1,9 +1,7 @@
-use std::fmt::Debug;
-
 use crate::lexer::{Token, TokenType};
 
 pub fn lexer_error(line: u16, message: &'static str) {
-    report(line, "", "Unexpected character");
+    report(line, "", message);
 }
 
 pub fn error(token: &Token, message: &'static str) {

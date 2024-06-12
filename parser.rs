@@ -41,15 +41,22 @@ pub enum Stmt {
     Var(Token, Option<Expr>),
     If(Expr, Box<Stmt>, Option<Box<Stmt>>),
     While(Expr, Box<Stmt>),
+    Func(Token, Vec<Token>, Vec<Stmt>)
 }
 
 #[derive(Debug, Clone)]
 struct ParserError {
     token: Token,
-    message: &'static str
+    message: String
 }
 impl ParserError {
     fn new(token: &Token, message: &'static str) -> Self {
+        Self { 
+            token:token.clone(), 
+            message: String::from(message)
+        }
+    }
+    fn new_string(token: &Token, message: String) -> Self {
         Self { 
             token:token.clone(), 
             message
@@ -87,26 +94,64 @@ impl Parser {
     }
 
     fn declaration(&mut self) -> Option<Stmt> {
+        let stmt;
         if self.check_next(&[TokenType::Var]) {
             self.advance();
-            match self.var_declaration() {
-                Ok(v) => return Some(v),
-                Err(err) => eprintln!("{}", err)
-            }
+            stmt = self.var_declaration();
+        }else if self.check_next(&[TokenType::Fun]) {
+            self.advance();
+            stmt = self.fun_stmt("function");
         }else {
-            match self.statement() {
-                Ok(v) => return Some(v),
-                Err(err) => eprintln!("{}", err)
+            stmt = self.statement();
+        }
+        match stmt {
+            Ok(v) => return Some(v),
+            Err(err) => {
+                eprintln!("{}", err);
+                return None;
             }
         }
-        None
+    }
+
+    fn fun_stmt(&mut self, kind: &'static str) -> Result<Stmt, ParserError> {
+        let fun_name = self.advance().unwrap();
+        if matches!(fun_name.token_type, TokenType::Id(_)) {
+            let fun_name = self.advance().unwrap();
+            self.expect_token(TokenType::LeftParen,"Expect '('")?;
+            let mut parameters = vec!();
+            if !self.check_next(&[TokenType::RightParen]) {
+                loop {
+                    let par = self.advance();
+                    if let Some(id) = par {
+                        if matches!(id.token_type, TokenType::Id(_)) {
+                            parameters.push(id);
+                        }else {
+                            return Err(ParserError::new(&self.advance().unwrap(), "Expect parameter name"));
+                        }
+                    }else {
+                        return Err(ParserError::new(&self.advance().unwrap(), "Expect parameter name"));
+                    }
+                    if !self.check_next(&[TokenType::Comma]) {
+                        break;
+                    }
+                }
+            }
+            self.expect_token(TokenType::RightParen, "Expect ')' after parameters.")?;
+            if parameters.len()>=255 {
+                eprintln!("{}", ParserError::new(&fun_name,"Can't have more than 255 parameters."));
+            }
+            self.expect_token(TokenType::LeftBrace, "Expect '{' before body.")?;
+            return Ok(Stmt::Func(fun_name, parameters, self.block()?));
+        }else {
+            return Err(ParserError::new_string(&self.advance().unwrap(), format!("Expect {} name.", kind)))
+        }
     }
 
     fn var_declaration(&mut self) -> Result<Stmt, ParserError> {
         let token = self.advance();
         if let Some(t) = token {
             match t.token_type {
-                TokenType::Identifier(_) => {
+                TokenType::Id(_) => {
                     let mut expr = None;
                     if self.check_next(&[TokenType::Equal]) {
                         self.advance();
@@ -335,13 +380,13 @@ impl Parser {
 
     fn primary(&mut self) -> Result<Expr,ParserError> {
         if let Some(token) = self.advance() {
-            if matches!(token.token_type, TokenType::Number(_) | TokenType::String(_) | TokenType::True | TokenType::False | TokenType::Nil) {
+            if matches!(token.token_type, TokenType::Number(_) | TokenType::Str(_) | TokenType::True | TokenType::False | TokenType::Nil) {
                 return Ok(Expr::Literal(token));
             }else if matches!(token.token_type, TokenType::LeftParen) {
                 let expr = self.expression()?;
                 self.expect_token(TokenType::RightParen,"Expect ')' after expression.")?;
                 return Ok(Expr::Grouping(Box::new(expr)));
-            }else if matches!(token.token_type, TokenType::Identifier(_)) {
+            }else if matches!(token.token_type, TokenType::Id(_)) {
                 return Ok(Expr::Variable(token));
             }else {
                 return Err(ParserError::new(&token, "Expected expression."));

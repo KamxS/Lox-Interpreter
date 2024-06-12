@@ -1,4 +1,4 @@
-use crate::error::{error, report, lexer_error};
+use crate::error::lexer_error;
 use core::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -12,7 +12,7 @@ pub enum TokenType {
     Greater, GreaterEqual,
     Less, LessEqual,
     // Literals.
-    Identifier(String), String(String), Number(f32),
+    Id(String), Str(String), Number(f32),
     // Keywords.
     And, Class, Else, False, Fun, For, If, Nil, Or,
     Print, Return, Super, This, True, Var, While,
@@ -101,7 +101,7 @@ impl Lexer {
                         lexer_error(self.line, "Unterminated string");
                     }
                     let substr = String::from(&self.input[self.start..self.current-1]);
-                    self.tokens.push(Token::new(TokenType::String(substr), self.line));
+                    self.tokens.push(Token::new(TokenType::Str(substr), self.line));
                 }
                 '\n' => self.line+=1,
                 '\t' => {}
@@ -146,7 +146,7 @@ impl Lexer {
                             "true" => self.tokens.push(Token::new(TokenType::True,self.line)),
                             "false" => self.tokens.push(Token::new(TokenType::False,self.line)),
                             "null" => self.tokens.push(Token::new(TokenType::Nil,self.line)),
-                            v => self.tokens.push(Token::new(TokenType::Identifier(String::from(v)), self.line))
+                            v => self.tokens.push(Token::new(TokenType::Id(String::from(v)), self.line))
                         }
                     }else {
                         lexer_error(self.line, "Unexpected character");
