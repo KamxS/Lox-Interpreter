@@ -1,5 +1,8 @@
-fun lol ( ) {
-    print 10;
+fun lol(num) {
+    var y = num;
+    print num;
 }
-
-print lol();
+lol(12414);
+lol(9);
+lol(38);
+print y;

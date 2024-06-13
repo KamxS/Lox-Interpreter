@@ -1,10 +1,13 @@
 use core::{fmt, panic};
-use std::time::{SystemTime};
+use std::time::SystemTime;
 use std::collections::HashMap;
 
+use crate::interpreter::callable::LoxCallable;
 use crate::parser::{Expr, Stmt};
 use crate::lexer::{Token,TokenType};
+use callable::{Callable, NativeCallable};
 
+mod callable;
 
 fn clock(_interpreter: &Interpreter, _args: Vec<Value>) -> Value {
     Value::Number(SystemTime::now().elapsed().unwrap().as_secs() as f32)
@@ -54,28 +57,12 @@ impl fmt::Display for RuntimeError {
     }
 }
 
-#[derive(Clone)]
-pub struct Callable {
-    arity: usize,
-    call_f: fn(&Interpreter, Vec<Value>)->Value
-}
-impl Callable {
-    fn call(&self, interpreter: &Interpreter, args: Vec<Value>) -> Value{
-        (self.call_f)(interpreter, args)
-    }
-}
-impl PartialEq for Callable {
-    fn eq(&self, other: &Self) -> bool {
-        false
-    }
-}
-
 pub struct Interpreter {
     vars: Vec<HashMap<String, Value>>
 }
 impl Interpreter {
     pub fn new() -> Self {
-        let clock_f = Value::CallableV(Callable{arity: 0, call_f: clock});
+        let clock_f = Value::CallableV(Callable::Native(NativeCallable::new(0,clock)));
         let mut globals = HashMap::new();
         globals.insert(String::from("clock"), clock_f);
         Self{vars: vec!(globals)}
@@ -141,7 +128,10 @@ impl Interpreter {
     }
 
     fn func_decl_stmt(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
-        if let Stmt::Func(name, parameters, body) = stmt{
+        if let Stmt::Func(name, _, _) = stmt{
+            let func = Value::CallableV(Callable::Lox(LoxCallable::new(stmt.clone())));
+            self.define(name, func);
+            /*
             let func = Value::CallableV(
                 Callable{arity: 0, call_f: |interpreter, arg|{
                     //fn_local.insert(k, v)
@@ -149,7 +139,7 @@ impl Interpreter {
                     return Value::Null
                 }}
             );
-            self.define(name, func);
+            */
             return Ok(());
         }
         panic!()
@@ -197,15 +187,30 @@ impl Interpreter {
     fn eval_call(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
         if let Expr::Call(calle, t, args) = expr {
             let calle_v = self.eval(calle)?;
-            if let Value::CallableV(callable) = calle_v {
-                if args.len() != callable.arity{
-                    return Err(RuntimeError::new_str(t, format!("Expected {} arguments but got {}.", callable.arity, args.len())));
+            if let Value::CallableV(callableEnum) = calle_v {
+                match callableEnum {
+                    Callable::Native(callable) => {
+                        if args.len() != callable.arity{
+                            return Err(RuntimeError::new_str(t, format!("Expected {} arguments but got {}.", callable.arity, args.len())));
+                        }
+                        let mut args_v = vec!();
+                        for arg in args.iter() {
+                            args_v.push(self.eval(arg)?);
+                        }
+                        Ok(callable.call(self, args_v))
+                    },
+                    Callable::Lox(callable) => {
+                        if args.len() != callable.arity{
+                            return Err(RuntimeError::new_str(t, format!("Expected {} arguments but got {}.", callable.arity, args.len())));
+                        }
+                        let mut args_v = vec!();
+                        for arg in args.iter() {
+                            args_v.push(self.eval(arg)?);
+                        }
+                        callable.call(self, args_v);
+                        Ok(Value::Null)
+                    }
                 }
-                let mut args_v = vec!();
-                for arg in args.iter() {
-                    args_v.push(self.eval(arg)?);
-                }
-                Ok(callable.call(self, args_v))
             }else {
                 Err(RuntimeError::new(t,"Can only call functions and classes."))
             }

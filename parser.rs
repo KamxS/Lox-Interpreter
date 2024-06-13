@@ -1,7 +1,7 @@
 use core::{fmt, panic};
-use crate::{lexer::{Token, TokenType}};
+use crate::lexer::{Token, TokenType};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     Literal(Token), 
     Variable(Token),
@@ -33,7 +33,7 @@ impl fmt::Display for Expr {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Stmt {
     Print(Expr),
     Expression(Expr),
