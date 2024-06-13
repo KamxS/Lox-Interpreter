@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::interpreter::{Interpreter, Value};
-use crate::lexer::{Token, TokenType};
+use crate::interpreter::{Interpreter, Value, RuntimeError};
+use crate::lexer::{TokenType};
 use crate::parser::Stmt;
 
 #[derive(Clone, PartialEq)]
@@ -24,7 +24,7 @@ impl NativeCallable {
     }
 }
 impl PartialEq for NativeCallable {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _other: &Self) -> bool {
         false
     }
 }
@@ -44,7 +44,7 @@ impl LoxCallable {
         }
         panic!()
     }
-    pub fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) {
+    pub fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> Result<Value, RuntimeError>{
         if let Stmt::Func(_, params, block) = &self.definition {
             let mut local = HashMap::new();
             for ind in 0..params.len() {
@@ -56,15 +56,27 @@ impl LoxCallable {
             }
             interpreter.vars.push(local);
             for stmt in block {
-                interpreter.execute(stmt);
+                if let Stmt::Return(_, expr_o) = stmt {
+                    if let Some(expr) = expr_o {
+                        let val = interpreter.eval(expr);
+                        interpreter.vars.pop();
+                        return val;
+                    }else {
+                        interpreter.vars.pop();
+                        return Ok(Value::Null);
+                    }
+                }else {
+                    interpreter.execute(stmt)?;
+                }
             }
-            return;
+            interpreter.vars.pop();
+            return Ok(Value::Null);
         }
         panic!()
     }
 }
 impl PartialEq for LoxCallable {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _other: &Self) -> bool {
         false
     }
 }

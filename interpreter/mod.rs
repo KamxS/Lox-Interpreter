@@ -33,7 +33,7 @@ impl fmt::Display for Value {
     }
 }
 #[derive(Debug, Clone)]
-struct RuntimeError {
+pub struct RuntimeError {
     token: Token,
     message: String
 }
@@ -83,6 +83,7 @@ impl Interpreter {
             Stmt::If(_,_,_) => self.if_stmt(stmt)?,
             Stmt::Func(_,_,_) => self.func_decl_stmt(stmt)?,
             Stmt::While(_,_) => self.while_stmt(stmt)?,
+            Stmt::Return(t,_) => return Err(RuntimeError::new(t, "Return statement can only be used inside functions or methods")),
             _ => self.expr_stmt(stmt)?
         }
         Ok(())
@@ -131,15 +132,6 @@ impl Interpreter {
         if let Stmt::Func(name, _, _) = stmt{
             let func = Value::CallableV(Callable::Lox(LoxCallable::new(stmt.clone())));
             self.define(name, func);
-            /*
-            let func = Value::CallableV(
-                Callable{arity: 0, call_f: |interpreter, arg|{
-                    //fn_local.insert(k, v)
-                    //self.vars.push(HashMap::new());
-                    return Value::Null
-                }}
-            );
-            */
             return Ok(());
         }
         panic!()
@@ -187,8 +179,8 @@ impl Interpreter {
     fn eval_call(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
         if let Expr::Call(calle, t, args) = expr {
             let calle_v = self.eval(calle)?;
-            if let Value::CallableV(callableEnum) = calle_v {
-                match callableEnum {
+            if let Value::CallableV(callable_enum) = calle_v {
+                match callable_enum {
                     Callable::Native(callable) => {
                         if args.len() != callable.arity{
                             return Err(RuntimeError::new_str(t, format!("Expected {} arguments but got {}.", callable.arity, args.len())));
@@ -207,8 +199,7 @@ impl Interpreter {
                         for arg in args.iter() {
                             args_v.push(self.eval(arg)?);
                         }
-                        callable.call(self, args_v);
-                        Ok(Value::Null)
+                        callable.call(self, args_v)
                     }
                 }
             }else {

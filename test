@@ -1,8 +1,18 @@
 fun lol(num) {
     var y = num;
-    print num;
+    return num*10;
 }
-lol(12414);
-lol(9);
-lol(38);
+print lol(12414);
+print lol(9);
+print lol(38);
 print y;
+
+
+fun count(n) {
+    while (n < 100) {
+        if (n == 3) return n;
+        print n;
+        n = n + 1;
+    }
+}
+count(1);

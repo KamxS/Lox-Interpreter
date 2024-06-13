@@ -41,7 +41,8 @@ pub enum Stmt {
     Var(Token, Option<Expr>),
     If(Expr, Box<Stmt>, Option<Box<Stmt>>),
     While(Expr, Box<Stmt>),
-    Func(Token, Vec<Token>, Vec<Stmt>)
+    Func(Token, Vec<Token>, Vec<Stmt>),
+    Return(Token, Option<Expr>) 
 }
 
 #[derive(Debug, Clone)]
@@ -146,6 +147,16 @@ impl Parser {
         }
     }
 
+    fn return_stmt(&mut self) -> Result<Stmt, ParserError> {
+        let token = self.advance().unwrap();
+        let mut expr = None;
+        if !self.check_next(&[TokenType::Semicolon]) {
+            expr = Some(self.expression()?);
+        }
+        self.expect_token(TokenType::Semicolon, "Expect ';' after return value.")?;
+        Ok(Stmt::Return(token, expr))
+    }
+
     fn var_declaration(&mut self) -> Result<Stmt, ParserError> {
         let token = self.advance();
         if let Some(t) = token {
@@ -181,7 +192,10 @@ impl Parser {
         }else if self.check_next(&[TokenType::For]) {
             self.advance();
             return self.for_statement();
+        }else if self.check_next(&[TokenType::Return]) {
+            return self.return_stmt();
         }
+
         else {
             return self.expr_statement();
         }
