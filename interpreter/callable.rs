@@ -1,10 +1,12 @@
+use std::fmt;
 use std::collections::HashMap;
+use std::error::Error;
 
-use crate::interpreter::{Interpreter, Value, RuntimeError};
-use crate::lexer::{TokenType};
+use crate::interpreter::{Interpreter, ReturnError, RuntimeError, Value};
+use crate::lexer::TokenType;
 use crate::parser::Stmt;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Callable {
     Native(NativeCallable),
     Lox(LoxCallable)
@@ -14,6 +16,13 @@ pub enum Callable {
 pub struct NativeCallable {
     pub arity: usize,
     call_f: fn(&Interpreter, Vec<Value>)->Value
+}
+impl fmt::Debug for NativeCallable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Point")
+         .field("arity", &self.arity)
+         .finish()
+    }
 }
 impl NativeCallable {
     pub fn new(arity:usize,call_f: fn(&Interpreter, Vec<Value>)-> Value) -> Self {
@@ -29,7 +38,7 @@ impl PartialEq for NativeCallable {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct LoxCallable {
     pub arity: usize,
     definition: Stmt
@@ -44,7 +53,7 @@ impl LoxCallable {
         }
         panic!()
     }
-    pub fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> Result<Value, RuntimeError>{
+    pub fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> Result<Value, Box<dyn Error>>{
         if let Stmt::Func(_, params, block) = &self.definition {
             let mut local = HashMap::new();
             for ind in 0..params.len() {
@@ -56,17 +65,14 @@ impl LoxCallable {
             }
             interpreter.vars.push(local);
             for stmt in block {
-                if let Stmt::Return(_, expr_o) = stmt {
-                    if let Some(expr) = expr_o {
-                        let val = interpreter.eval(expr);
-                        interpreter.vars.pop();
-                        return val;
-                    }else {
-                        interpreter.vars.pop();
-                        return Ok(Value::Null);
+                let exec_result = interpreter.execute(stmt);
+                if exec_result.is_err() {
+                    interpreter.vars.pop();
+                    let err = exec_result.unwrap_err();
+                    if let Some(r_err) = err.downcast_ref::<ReturnError>() {
+                        return Ok(r_err.value.clone());
                     }
-                }else {
-                    interpreter.execute(stmt)?;
+                    return Err(err);
                 }
             }
             interpreter.vars.pop();

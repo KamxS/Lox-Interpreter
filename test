@@ -1,18 +1,7 @@
-fun lol(num) {
-    var y = num;
-    return num*10;
+fun fib(n) {
+    if (n <= 1) return n;
+    return fib(n - 2) + fib(n - 1);
 }
-print lol(12414);
-print lol(9);
-print lol(38);
-print y;
-
-
-fun count(n) {
-    while (n < 100) {
-        if (n == 3) return n;
-        print n;
-        n = n + 1;
-    }
+for (var i = 0; i < 20; i = i + 1) {
+    print fib(i);
 }
-count(1);

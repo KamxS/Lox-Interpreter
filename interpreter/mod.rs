@@ -1,4 +1,5 @@
 use core::{fmt, panic};
+use std::error::Error;
 use std::time::SystemTime;
 use std::collections::HashMap;
 
@@ -13,7 +14,7 @@ fn clock(_interpreter: &Interpreter, _args: Vec<Value>) -> Value {
     Value::Number(SystemTime::now().elapsed().unwrap().as_secs() as f32)
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum Value {
     String(String), 
     Number(f32), 
@@ -56,6 +57,18 @@ impl fmt::Display for RuntimeError {
         return write!(f,"[line {}] {}", self.token.line, self.message);
     }
 }
+impl Error for RuntimeError {}
+
+#[derive(Debug)]
+struct ReturnError{
+    value: Value
+}
+impl fmt::Display for ReturnError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,"return {}", self.value)
+    }
+}
+impl Error for ReturnError{}
 
 pub struct Interpreter {
     vars: Vec<HashMap<String, Value>>
@@ -75,7 +88,7 @@ impl Interpreter {
         }
     }
 
-    fn execute(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
+    fn execute(&mut self, stmt: &Stmt) -> Result<(), Box<dyn Error>> {
         match stmt {
             Stmt::Print(_) => self.print_stmt(stmt)?,
             Stmt::Var(_, _) => self.var_decl_stmt(stmt)?,
@@ -83,13 +96,13 @@ impl Interpreter {
             Stmt::If(_,_,_) => self.if_stmt(stmt)?,
             Stmt::Func(_,_,_) => self.func_decl_stmt(stmt)?,
             Stmt::While(_,_) => self.while_stmt(stmt)?,
-            Stmt::Return(t,_) => return Err(RuntimeError::new(t, "Return statement can only be used inside functions or methods")),
+            Stmt::Return(_,_) => self.return_stmt(stmt)?,
             _ => self.expr_stmt(stmt)?
         }
         Ok(())
     }
 
-    fn block(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
+    fn block(&mut self, stmt: &Stmt) -> Result<(), Box<dyn Error>> {
         if let Stmt::Block(stmts) = stmt{
             self.vars.push(HashMap::new());
             for stmt in stmts.iter() {
@@ -100,7 +113,7 @@ impl Interpreter {
         Ok(())
     }
 
-    fn if_stmt(&mut self, stmt: &Stmt) -> Result<(),RuntimeError> {
+    fn if_stmt(&mut self, stmt: &Stmt) -> Result<(),Box<dyn Error>> {
         if let Stmt::If(condition, then, else_stmt) = stmt {
             let cond = self.eval(condition)?;
             if self.get_bool(&cond) {
@@ -115,8 +128,18 @@ impl Interpreter {
         }
         panic!()
     }
+    fn return_stmt(&mut self, stmt: &Stmt) -> Result<(),Box<dyn Error>> {
+        if let Stmt::Return(_, expr) = stmt {
+            let mut return_v  = Value::Null;
+            if let Some(e) = expr {
+                return_v = self.eval(e)?;
+            }
+            return Err(Box::new(ReturnError{value:return_v}));
+        }
+        panic!()
+    }
 
-    fn while_stmt(&mut self, stmt: &Stmt) -> Result<(),RuntimeError> {
+    fn while_stmt(&mut self, stmt: &Stmt) -> Result<(),Box<dyn Error>> {
         if let Stmt::While(condition, stmt) = stmt {
             let mut cond = self.eval(condition)?;
             while self.get_bool(&cond) {
@@ -128,7 +151,7 @@ impl Interpreter {
         panic!()
     }
 
-    fn func_decl_stmt(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
+    fn func_decl_stmt(&mut self, stmt: &Stmt) -> Result<(), Box<dyn Error>> {
         if let Stmt::Func(name, _, _) = stmt{
             let func = Value::CallableV(Callable::Lox(LoxCallable::new(stmt.clone())));
             self.define(name, func);
@@ -137,7 +160,7 @@ impl Interpreter {
         panic!()
     }
 
-    fn var_decl_stmt(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
+    fn var_decl_stmt(&mut self, stmt: &Stmt) -> Result<(), Box<dyn Error>> {
         if let Stmt::Var(token, expr) = stmt {
             let mut val = Value::Null;
             if let Some(e) = expr {
@@ -149,21 +172,21 @@ impl Interpreter {
         panic!()
     }
 
-    fn print_stmt(&mut self, stmt: &Stmt) -> Result<(), RuntimeError>{
+    fn print_stmt(&mut self, stmt: &Stmt) -> Result<(), Box<dyn Error>>{
         if let Stmt::Print(expr)= stmt{
             println!("{}", self.eval(expr)?);
         }
         Ok(())
     }
 
-    fn expr_stmt(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
+    fn expr_stmt(&mut self, stmt: &Stmt) -> Result<(), Box<dyn Error>> {
         if let Stmt::Expression(expr)= stmt{
             self.eval(expr)?;
         }
         Ok(())
     }
 
-    fn eval(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
+    fn eval(&mut self, expr: &Expr) -> Result<Value, Box<dyn Error>> {
         match expr {
             Expr::Literal(_) => Ok(self.eval_literal(expr)),
             Expr::Grouping(e) => self.eval(e),
@@ -176,14 +199,14 @@ impl Interpreter {
         }
     }
 
-    fn eval_call(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
+    fn eval_call(&mut self, expr: &Expr) -> Result<Value, Box<dyn Error>> {
         if let Expr::Call(calle, t, args) = expr {
             let calle_v = self.eval(calle)?;
             if let Value::CallableV(callable_enum) = calle_v {
                 match callable_enum {
                     Callable::Native(callable) => {
                         if args.len() != callable.arity{
-                            return Err(RuntimeError::new_str(t, format!("Expected {} arguments but got {}.", callable.arity, args.len())));
+                            return Err(Box::new(RuntimeError::new_str(t, format!("Expected {} arguments but got {}.", callable.arity, args.len()))));
                         }
                         let mut args_v = vec!();
                         for arg in args.iter() {
@@ -193,7 +216,7 @@ impl Interpreter {
                     },
                     Callable::Lox(callable) => {
                         if args.len() != callable.arity{
-                            return Err(RuntimeError::new_str(t, format!("Expected {} arguments but got {}.", callable.arity, args.len())));
+                            return Err(Box::new(RuntimeError::new_str(t, format!("Expected {} arguments but got {}.", callable.arity, args.len()))));
                         }
                         let mut args_v = vec!();
                         for arg in args.iter() {
@@ -203,14 +226,14 @@ impl Interpreter {
                     }
                 }
             }else {
-                Err(RuntimeError::new(t,"Can only call functions and classes."))
+                Err(Box::new(RuntimeError::new(t,"Can only call functions and classes.")))
             }
         }else {
             panic!()
         }
     }
 
-    fn eval_assignment(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
+    fn eval_assignment(&mut self, expr: &Expr) -> Result<Value, Box<dyn Error>> {
         if let Expr::Assign(name_token, e) = expr {
             let value = self.eval(e)?; 
             self.assign(&name_token, value.clone())?;
@@ -234,14 +257,14 @@ impl Interpreter {
         Value::Null
     }
 
-    fn eval_variable(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
+    fn eval_variable(&mut self, expr: &Expr) -> Result<Value, Box<dyn Error>> {
         if let Expr::Variable(name) = expr{
             return self.get(name);
         }
         panic!("Not really possible i guess");
     }
 
-    fn eval_unary(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
+    fn eval_unary(&mut self, expr: &Expr) -> Result<Value, Box<dyn Error>> {
         if let Expr::Unary(t, expr) = expr {
             let value = self.eval(expr)?;
             match t.token_type {
@@ -257,7 +280,7 @@ impl Interpreter {
         Ok(Value::Null)
     }
 
-    fn eval_logical(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
+    fn eval_logical(&mut self, expr: &Expr) -> Result<Value, Box<dyn Error>> {
         if let Expr::Logical(l_expr, t, r_expr) = expr {
             let l_value = self.eval(l_expr)?;
 
@@ -275,7 +298,7 @@ impl Interpreter {
         panic!()
     }
 
-    fn eval_binary(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
+    fn eval_binary(&mut self, expr: &Expr) -> Result<Value, Box<dyn Error>> {
         if let Expr::Binary(l_expr, t, r_expr) = expr {
             let l_value = self.eval(l_expr)?;
             let r_value = self.eval(r_expr)?;
@@ -347,7 +370,7 @@ impl Interpreter {
         }
     }
 
-    fn get(&mut self, token: &Token) -> Result<Value, RuntimeError>{
+    fn get(&mut self, token: &Token) -> Result<Value, Box<dyn Error>>{
         match &token.token_type {
             TokenType::Id(name) => {
                 for ind in (0..self.vars.len()).rev() {
@@ -355,13 +378,13 @@ impl Interpreter {
                         return Ok(v.clone());
                     }
                 }
-                return Err(RuntimeError::new(token, "Undefined variable [TODO: add var name]"))
+                return Err(Box::new(RuntimeError::new(token, "Undefined variable [TODO: add var name]")))
             }
             _ => panic!("This shouldn't be here (parser error)")
         }
     }
 
-    fn assign(&mut self, token: &Token, value: Value) -> Result<(), RuntimeError>{
+    fn assign(&mut self, token: &Token, value: Value) -> Result<(), Box<dyn Error>>{
         match &token.token_type {
             TokenType::Id(name) => {
                 for ind in (0..self.vars.len()).rev() {
@@ -371,7 +394,7 @@ impl Interpreter {
                         return Ok(());
                     }
                 }
-                return Err(RuntimeError::new(token, "Undefined variable [TODO: add var name]"))
+                return Err(Box::new(RuntimeError::new(token, "Undefined variable [TODO: add var name]")))
             }
             _ => panic!("This shouldn't be here (parser error)")
         }
