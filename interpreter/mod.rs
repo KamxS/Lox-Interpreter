@@ -153,7 +153,7 @@ impl Interpreter {
 
     fn func_decl_stmt(&mut self, stmt: &Stmt) -> Result<(), Box<dyn Error>> {
         if let Stmt::Func(name, _, _) = stmt{
-            let func = Value::CallableV(Callable::Lox(LoxCallable::new(stmt.clone())));
+            let func = Value::CallableV(Callable::Lox(LoxCallable::new(stmt.clone(), self.vars.last().unwrap().clone())));
             self.define(name, func);
             return Ok(());
         }
@@ -214,7 +214,7 @@ impl Interpreter {
                         }
                         Ok(callable.call(self, args_v))
                     },
-                    Callable::Lox(callable) => {
+                    Callable::Lox(mut callable) => {
                         if args.len() != callable.arity{
                             return Err(Box::new(RuntimeError::new_str(t, format!("Expected {} arguments but got {}.", callable.arity, args.len()))));
                         }

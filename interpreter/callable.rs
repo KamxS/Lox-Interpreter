@@ -41,19 +41,21 @@ impl PartialEq for NativeCallable {
 #[derive(Clone, Debug)]
 pub struct LoxCallable {
     pub arity: usize,
-    definition: Stmt
+    definition: Stmt,
+    environment: HashMap<String,Value>
 }
 impl LoxCallable {
-    pub fn new(definition: Stmt) -> Self {
+    pub fn new(definition: Stmt, environment: HashMap<String,Value>) -> Self {
         if let Stmt::Func(_, params, _) = &definition {
             return Self {
                 arity: params.len(),
-                definition
+                definition,
+                environment
             };
         }
         panic!()
     }
-    pub fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> Result<Value, Box<dyn Error>>{
+    pub fn call(&mut self, interpreter: &mut Interpreter, args: Vec<Value>) -> Result<Value, Box<dyn Error>>{
         if let Stmt::Func(_, params, block) = &self.definition {
             let mut local = HashMap::new();
             for ind in 0..params.len() {
@@ -63,10 +65,12 @@ impl LoxCallable {
                     panic!()
                 }
             }
+            interpreter.vars.push(self.environment.clone());
             interpreter.vars.push(local);
             for stmt in block {
                 let exec_result = interpreter.execute(stmt);
                 if exec_result.is_err() {
+                    interpreter.vars.pop();
                     interpreter.vars.pop();
                     let err = exec_result.unwrap_err();
                     if let Some(r_err) = err.downcast_ref::<ReturnError>() {
@@ -75,6 +79,7 @@ impl LoxCallable {
                     return Err(err);
                 }
             }
+            interpreter.vars.pop();
             interpreter.vars.pop();
             return Ok(Value::Null);
         }
